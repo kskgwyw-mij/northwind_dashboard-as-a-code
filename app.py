@@ -206,7 +206,7 @@ def server(input, output, session):
 
     @render.ui
     def orders():
-        return f"{len(df()['OrderID'].nunique()):,}"
+        return f"{df()['OrderID'].nunique():,}"
 
     @render.ui
     def lines():
