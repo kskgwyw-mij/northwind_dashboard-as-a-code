@@ -20,7 +20,7 @@ uv creates the virtualenv and installs the pinned dependencies from
 Features:
 
 - KPIs: total revenue, orders, line items, average order value
-- Revenue over time (monthly), by category, ship country, and by sales employee
+- Revenue over time (monthly), by category, ship country, shipper, and by sales employee
 - Top 10 products and top 10 customers by revenue
 - Order delivery performance (days from order to shipment)
 - Filters: product category, sales employee, order date range,

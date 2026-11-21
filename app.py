@@ -27,6 +27,7 @@ def load_data():
     lines = lines.merge(
         shippers, left_on="ShipVia", right_on="ShipperID", how="left"
     )
+    lines["Shipper"] = lines["CompanyName"]
 
     orders = orders.merge(customers, on="CustomerID")
     orders = orders.merge(employees, on="EmployeeID")
@@ -125,10 +126,17 @@ app_ui = ui.page_fluid(
         ),
         ui.row(
             ui.column(
-                12,
+                6,
                 ui.card(
                     ui.card_header("Revenue by ship country"),
                     output_widget("revenue_country"),
+                ),
+            ),
+            ui.column(
+                6,
+                ui.card(
+                    ui.card_header("Revenue by shipper"),
+                    output_widget("revenue_shipper"),
                 ),
             ),
         ),
@@ -267,6 +275,17 @@ def server(input, output, session):
         country = d.groupby("ShipCountry", as_index=False)["Revenue"].sum()
         country = country.sort_values("Revenue", ascending=False)
         fig = px.bar(country, x="ShipCountry", y="Revenue")
+        fig.update_layout(margin=dict(t=20, b=10), yaxis_title="Revenue ($)")
+        return fig
+
+    @render_plotly
+    def revenue_shipper():
+        d = df()
+        if d.empty:
+            return go.Figure()
+        sh = d.groupby("Shipper", as_index=False)["Revenue"].sum()
+        sh = sh.sort_values("Revenue", ascending=False)
+        fig = px.bar(sh, x="Shipper", y="Revenue")
         fig.update_layout(margin=dict(t=20, b=10), yaxis_title="Revenue ($)")
         return fig
 
