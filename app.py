@@ -3,6 +3,7 @@ from datetime import date
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from shiny import App, reactive, render, ui
 from shinywidgets import output_widget, render_plotly
 
@@ -224,8 +225,30 @@ def server(input, output, session):
             return go.Figure()
         d["Month"] = d["OrderDate"].dt.to_period("M").dt.to_timestamp()
         monthly = d.groupby("Month", as_index=False)["Revenue"].sum()
-        fig = px.bar(monthly, x="Month", y="Revenue")
-        fig.update_layout(margin=dict(t=20, b=10), yaxis_title="Revenue ($)")
+
+        o = base_revenue().copy()
+        o["Month"] = o["OrderDate"].dt.to_period("M").dt.to_timestamp()
+        freight = o.groupby("Month", as_index=False)["Freight"].sum()
+
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        fig.add_bar(
+            x=monthly["Month"],
+            y=monthly["Revenue"],
+            name="Revenue",
+        )
+        fig.add_scatter(
+            x=freight["Month"],
+            y=freight["Freight"],
+            name="Freight",
+            mode="lines+markers",
+            line=dict(color="firebrick"),
+            secondary_y=True,
+        )
+        fig.update_layout(
+            margin=dict(t=20, b=10), legend=dict(orientation="h")
+        )
+        fig.update_yaxes(title_text="Revenue ($)", secondary_y=False)
+        fig.update_yaxes(title_text="Freight ($)", secondary_y=True)
         return fig
 
     @render_plotly
