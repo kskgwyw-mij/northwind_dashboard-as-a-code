@@ -252,7 +252,6 @@ def server(input, output, session):
             name="Freight ($)",
             mode="lines+markers",
             line=dict(color="firebrick"),
-            visible="legendonly",
             hovertemplate="Freight: $%{y:,.2f}<extra>Freight ($)</extra>",
             secondary_y=True,
         )
@@ -268,16 +267,21 @@ def server(input, output, session):
                 "Freight: %{y:.2f}% of revenue"
                 " (%{customdata:$,.0f})<extra>Freight %</extra>"
             ),
-            secondary_y=True,
+            yaxis="y3",
         )
         fig.update_layout(
-            margin=dict(t=20, b=10),
+            margin=dict(t=20, b=10, r=20),
             legend=dict(orientation="h"),
-            yaxis2=dict(ticksuffix="%"),
             hovermode="x unified",
+            yaxis3=dict(
+                title="Freight (%)",
+                ticksuffix="%",
+                side="right",
+                showgrid=False,
+            ),
         )
         fig.update_yaxes(title_text="Revenue ($)", secondary_y=False)
-        fig.update_yaxes(title_text="Freight (% / $)", secondary_y=True)
+        fig.update_yaxes(title_text="Freight ($)", secondary_y=True)
         return fig
 
     @render_plotly
