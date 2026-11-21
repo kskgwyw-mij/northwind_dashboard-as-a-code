@@ -238,6 +238,13 @@ def server(input, output, session):
             x=monthly["Month"],
             y=monthly["Revenue"],
             name="Revenue",
+            customdata=ratio.set_index("Month")["FreightPct"]
+            .reindex(monthly["Month"])
+            .values,
+            hovertemplate=(
+                "Revenue: $%{y:,.0f}"
+                "<br>Freight: %{customdata:.2f}%<extra></extra>"
+            ),
         )
         fig.add_scatter(
             x=ratio["Month"],
@@ -246,20 +253,28 @@ def server(input, output, session):
             mode="lines+markers",
             line=dict(color="firebrick"),
             visible="legendonly",
+            hovertemplate="Freight: $%{y:,.2f}<extra>Freight ($)</extra>",
             secondary_y=True,
         )
+        pct_customdata = ratio.set_index("Month")["Revenue"].values
         fig.add_scatter(
             x=ratio["Month"],
             y=ratio["FreightPct"],
             name="Freight as % of revenue",
             mode="lines+markers",
             line=dict(color="dimgray"),
+            customdata=pct_customdata,
+            hovertemplate=(
+                "Freight: %{y:.2f}% of revenue"
+                " (%{customdata:$,.0f})<extra>Freight %</extra>"
+            ),
             secondary_y=True,
         )
         fig.update_layout(
             margin=dict(t=20, b=10),
             legend=dict(orientation="h"),
             yaxis2=dict(ticksuffix="%"),
+            hovermode="x unified",
         )
         fig.update_yaxes(title_text="Revenue ($)", secondary_y=False)
         fig.update_yaxes(title_text="Freight (% / $)", secondary_y=True)
