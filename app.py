@@ -125,6 +125,15 @@ app_ui = ui.page_fluid(
         ),
         ui.row(
             ui.column(
+                12,
+                ui.card(
+                    ui.card_header("Revenue by ship country"),
+                    output_widget("revenue_country"),
+                ),
+            ),
+        ),
+        ui.row(
+            ui.column(
                 6,
                 ui.card(
                     ui.card_header("Top 10 products by revenue"),
@@ -248,6 +257,17 @@ def server(input, output, session):
         merged = merged.nlargest(10, "Revenue").sort_values("Revenue")
         fig = px.bar(merged, x="Revenue", y="CompanyName", orientation="h")
         fig.update_layout(margin=dict(t=20, b=10), xaxis_title="Revenue ($)")
+        return fig
+
+    @render_plotly
+    def revenue_country():
+        d = df()
+        if d.empty:
+            return go.Figure()
+        country = d.groupby("ShipCountry", as_index=False)["Revenue"].sum()
+        country = country.sort_values("Revenue", ascending=False)
+        fig = px.bar(country, x="ShipCountry", y="Revenue")
+        fig.update_layout(margin=dict(t=20, b=10), yaxis_title="Revenue ($)")
         return fig
 
     @render_plotly

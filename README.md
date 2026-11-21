@@ -6,17 +6,21 @@ see `schema.md` for the table relations and ERD.
 
 ## Interactive dashboard (Shiny for Python + Plotly)
 
+The project uses [uv](https://docs.astral.sh/uv/) for Python setup and
+dependency management.
+
 ```bash
-pip install -r requirements.txt
-shiny run app.py --reload
+uv run shiny run app.py --reload
 ```
 
-Then open the printed URL (default http://127.0.0.1:8000).
+uv creates the virtualenv and installs the pinned dependencies from
+`pyproject.toml` / `uv.lock` automatically. Then open the printed URL
+(default http://127.0.0.1:8000).
 
 Features:
 
 - KPIs: total revenue, orders, line items, average order value
-- Revenue over time (monthly), by category, and by sales employee
+- Revenue over time (monthly), by category, ship country, and by sales employee
 - Top 10 products and top 10 customers by revenue
 - Order delivery performance (days from order to shipment)
 - Filters: product category, sales employee, order date range,
