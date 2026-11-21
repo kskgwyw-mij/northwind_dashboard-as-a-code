@@ -3,6 +3,7 @@ from datetime import date
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from shiny import App, reactive, render, ui
 from shinywidgets import output_widget, render_plotly
 
@@ -27,6 +28,7 @@ def load_data():
     lines = lines.merge(
         shippers, left_on="ShipVia", right_on="ShipperID", how="left"
     )
+    lines["Shipper"] = lines["CompanyName"]
 
     orders = orders.merge(customers, on="CustomerID")
     orders = orders.merge(employees, on="EmployeeID")
@@ -127,6 +129,22 @@ app_ui = ui.page_fluid(
             ui.column(
                 6,
                 ui.card(
+                    ui.card_header("Revenue by ship country"),
+                    output_widget("revenue_country"),
+                ),
+            ),
+            ui.column(
+                6,
+                ui.card(
+                    ui.card_header("Revenue by shipper"),
+                    output_widget("revenue_shipper"),
+                ),
+            ),
+        ),
+        ui.row(
+            ui.column(
+                6,
+                ui.card(
                     ui.card_header("Top 10 products by revenue"),
                     output_widget("top_products"),
                 ),
@@ -207,8 +225,59 @@ def server(input, output, session):
             return go.Figure()
         d["Month"] = d["OrderDate"].dt.to_period("M").dt.to_timestamp()
         monthly = d.groupby("Month", as_index=False)["Revenue"].sum()
-        fig = px.bar(monthly, x="Month", y="Revenue")
-        fig.update_layout(margin=dict(t=20, b=10), yaxis_title="Revenue ($)")
+
+        o = base_revenue().copy()
+        o["Month"] = o["OrderDate"].dt.to_period("M").dt.to_timestamp()
+        freight = o.groupby("Month", as_index=False)["Freight"].sum()
+
+        ratio = freight.merge(monthly, on="Month", how="inner")
+        ratio["FreightPct"] = 100 * ratio["Freight"] / ratio["Revenue"]
+
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        fig.add_bar(
+            x=monthly["Month"],
+            y=monthly["Revenue"],
+            name="Revenue",
+            customdata=ratio.set_index("Month")["FreightPct"]
+            .reindex(monthly["Month"])
+            .values,
+            hovertemplate=(
+                "Revenue: $%{y:,.0f}"
+                "<br>Freight: %{customdata:.2f}%<extra></extra>"
+            ),
+        )
+        fig.add_scatter(
+            x=ratio["Month"],
+            y=ratio["Freight"],
+            name="Freight ($)",
+            mode="lines+markers",
+            line=dict(color="firebrick"),
+            visible="legendonly",
+            hovertemplate="Freight: $%{y:,.2f}<extra>Freight ($)</extra>",
+            secondary_y=True,
+        )
+        pct_customdata = ratio.set_index("Month")["Revenue"].values
+        fig.add_scatter(
+            x=ratio["Month"],
+            y=ratio["FreightPct"],
+            name="Freight as % of revenue",
+            mode="lines+markers",
+            line=dict(color="dimgray"),
+            customdata=pct_customdata,
+            hovertemplate=(
+                "Freight: %{y:.2f}% of revenue"
+                " (%{customdata:$,.0f})<extra>Freight %</extra>"
+            ),
+            secondary_y=True,
+        )
+        fig.update_layout(
+            margin=dict(t=20, b=10),
+            legend=dict(orientation="h"),
+            yaxis2=dict(ticksuffix="%"),
+            hovermode="x unified",
+        )
+        fig.update_yaxes(title_text="Revenue ($)", secondary_y=False)
+        fig.update_yaxes(title_text="Freight (% / $)", secondary_y=True)
         return fig
 
     @render_plotly
@@ -248,6 +317,28 @@ def server(input, output, session):
         merged = merged.nlargest(10, "Revenue").sort_values("Revenue")
         fig = px.bar(merged, x="Revenue", y="CompanyName", orientation="h")
         fig.update_layout(margin=dict(t=20, b=10), xaxis_title="Revenue ($)")
+        return fig
+
+    @render_plotly
+    def revenue_country():
+        d = df()
+        if d.empty:
+            return go.Figure()
+        country = d.groupby("ShipCountry", as_index=False)["Revenue"].sum()
+        country = country.sort_values("Revenue", ascending=False)
+        fig = px.bar(country, x="ShipCountry", y="Revenue")
+        fig.update_layout(margin=dict(t=20, b=10), yaxis_title="Revenue ($)")
+        return fig
+
+    @render_plotly
+    def revenue_shipper():
+        d = df()
+        if d.empty:
+            return go.Figure()
+        sh = d.groupby("Shipper", as_index=False)["Revenue"].sum()
+        sh = sh.sort_values("Revenue", ascending=False)
+        fig = px.bar(sh, x="Shipper", y="Revenue")
+        fig.update_layout(margin=dict(t=20, b=10), yaxis_title="Revenue ($)")
         return fig
 
     @render_plotly
