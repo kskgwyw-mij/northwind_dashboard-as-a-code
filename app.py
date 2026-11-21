@@ -58,19 +58,7 @@ COMPACT = dict(
 ZOOM_JS = """
 document.addEventListener('contextmenu', function (ev) {
   const gd = ev.target.closest && ev.target.closest('.js-plotly-plot');
-  if (!gd) return;
-  ev.preventDefault();
-  const ax = gd._fullLayout && gd._fullLayout.xaxis;
-  if (!ax || !ax.range) return;
-  const [a, b] = ax.range.map(Number);
-  const c = (a + b) / 2;
-  const half = (b - a) * (ev.shiftKey ? 0.75 : 0.25);
-  Plotly.relayout(gd, {'xaxis.range': [c - half, c + half]});
-}, true);
-document.addEventListener('dblclick', function (ev) {
-  const gd = ev.target.closest && ev.target.closest('.js-plotly-plot');
-  if (!gd) return;
-  Plotly.relayout(gd, {'xaxis.autorange': true});
+  if (gd) ev.preventDefault();
 }, true);
 """
 
@@ -86,6 +74,12 @@ h2 { font-size: 1.15rem; margin: 0.1rem 0; }
 .value-box-value { font-size: 1rem !important; }
 .hint { font-size: 0.7rem; color: #888; margin: 0 0 0.3rem 0; }
 .js-plotly-plot { cursor: crosshair; }
+.zoom-btn { --bs-btn-padding-y: 0; --bs-btn-padding-x: 0.4rem;
+            --bs-btn-font-size: 0.7rem; --bs-btn-line-height: 1.1;
+            margin-left: 0.15rem; }
+.card-header { display: flex; }
+.card-header div:first-child { flex: 1; }
+.card-header div.zoom-controls { flex: 0; }
 """
 
 
@@ -99,6 +93,37 @@ def filter_lines(cat, emp, start, end):
         df["OrderDate"] <= pd.Timestamp(end)
     )
     return df[mask]
+
+
+CHART_IDS = [
+    "trend",
+    "category",
+    "country",
+    "shipper",
+    "employee",
+    "products",
+    "customers",
+    "delivery",
+]
+
+
+def chart_card(title, output_id, zoom_id):
+    return ui.card(
+        ui.card_header(
+            ui.tags.div(title),
+            ui.tags.div(
+                ui.input_action_button(
+                    f"zoom_out_{zoom_id}", "\u2212", class_="btn zoom-btn btn-outline-secondary"
+                ),
+                ui.input_action_button(
+                    f"zoom_in_{zoom_id}", "+", class_="btn zoom-btn btn-outline-secondary"
+                ),
+                class_="zoom-controls",
+            ),
+        ),
+        output_widget(output_id),
+        fillable=True,
+    )
 
 
 def compact_fig(fig, ytitle=None):
@@ -121,7 +146,7 @@ app_ui = ui.page_fluid(
         "The Northwind Access dataset (CSV export)",
         ui.tags.code(" — Shiny for Python + Plotly"),
         ui.tags.em(
-            " · Right-click a chart to zoom in on center (Shift = out, double-click to reset)"
+            " · Use +/− on a chart's title bar to zoom in on center or back out"
         ),
         ui.tags.br(),
         ui.tags.span("", class_="hint"),
@@ -158,51 +183,25 @@ app_ui = ui.page_fluid(
             col_widths=(3, 3, 3, 3),
         ),
         ui.layout_columns(
-            ui.card(
-                ui.card_header("Revenue over time (bars) with freight $ / freight %"),
-                output_widget("revenue_time"),
-                fillable=True,
+            chart_card(
+                "Revenue over time (bars) with freight $ / freight %",
+                "revenue_time",
+                "trend",
             ),
-            ui.card(
-                ui.card_header("Revenue by category"),
-                output_widget("category_bar"),
-                fillable=True,
-            ),
-            ui.card(
-                ui.card_header("Revenue by ship country"),
-                output_widget("revenue_country"),
-                fillable=True,
-            ),
+            chart_card("Revenue by category", "category_bar", "category"),
+            chart_card("Revenue by ship country", "revenue_country", "country"),
             col_widths=(4, 4, 4),
         ),
         ui.layout_columns(
-            ui.card(
-                ui.card_header("Revenue by shipper"),
-                output_widget("revenue_shipper"),
-                fillable=True,
-            ),
-            ui.card(
-                ui.card_header("Revenue by employee"),
-                output_widget("employee_bar"),
-                fillable=True,
-            ),
-            ui.card(
-                ui.card_header("Top 10 products"),
-                output_widget("top_products"),
-                fillable=True,
-            ),
+            chart_card("Revenue by shipper", "revenue_shipper", "shipper"),
+            chart_card("Revenue by employee", "employee_bar", "employee"),
+            chart_card("Top 10 products", "top_products", "products"),
             col_widths=(4, 4, 4),
         ),
         ui.layout_columns(
-            ui.card(
-                ui.card_header("Top 10 customers"),
-                output_widget("top_customers"),
-                fillable=True,
-            ),
-            ui.card(
-                ui.card_header("Order delivery (days to ship)"),
-                output_widget("delivery"),
-                fillable=True,
+            chart_card("Top 10 customers", "top_customers", "customers"),
+            chart_card(
+                "Order delivery (days to ship)", "delivery", "delivery"
             ),
             col_widths=(6, 6),
         ),
@@ -218,6 +217,40 @@ def server(input, output, session):
         if input.exclude_discontinued():
             d = d[d["Discontinued"].astype(str) != "True"]
         return d
+
+    zoom_state = reactive.Value({})
+
+    def apply_x_zoom(fig, zoom_id, xmin, xmax):
+        factor = zoom_state().get(zoom_id, 1.0)
+        if 0 < factor < 0.999 and xmax > xmin:
+            center = (xmin + xmax) / 2
+            half = (xmax - xmin) / 2 * factor
+            fig.update_xaxes(
+                range=[str(center - half), str(center + half)]
+            )
+        return fig
+
+    for cid in CHART_IDS:
+        def make_in(cid=cid):
+            @reactive.effect
+            def _():
+                n = input[f"zoom_in_{cid}"]()
+                if n:
+                    cur = dict(zoom_state())
+                    cur[cid] = max(0.05, cur.get(cid, 1.0) * 0.5)
+                    zoom_state.set(cur)
+
+        def make_out(cid=cid):
+            @reactive.effect
+            def _():
+                n = input[f"zoom_out_{cid}"]()
+                if n:
+                    cur = dict(zoom_state())
+                    cur[cid] = min(1.0, cur.get(cid, 1.0) * 2)
+                    zoom_state.set(cur)
+
+        make_in()
+        make_out()
 
     @reactive.calc
     def base_revenue():
@@ -317,7 +350,9 @@ def server(input, output, session):
         fig.update_yaxes(title_text="Freight ($)", secondary_y=True,
                          title_font=dict(size=9), tickfont=dict(size=9))
         fig.update_xaxes(title=None, tickfont=dict(size=9))
-        return fig
+        return apply_x_zoom(
+            fig, "trend", monthly["Month"].min(), monthly["Month"].max()
+        )
 
     @render_plotly
     def category_bar():
@@ -328,7 +363,9 @@ def server(input, output, session):
         cat = cat.sort_values("Revenue")
         fig = px.bar(cat, x="Revenue", y="CategoryName", orientation="h")
         fig.update_traces(hovertemplate="%{y}: $%{x:,.0f}<extra></extra>")
-        return compact_fig(fig)
+        return apply_x_zoom(
+            compact_fig(fig), "category", 0, cat["Revenue"].max()
+        )
 
     @render_plotly
     def top_products():
@@ -344,7 +381,9 @@ def server(input, output, session):
         fig = px.bar(top, x="Revenue", y="ProductName", orientation="h")
         fig.update_traces(hovertemplate="%{y}: $%{x:,.0f}<extra></extra>")
         fig.update_yaxes(tickfont=dict(size=8))
-        return compact_fig(fig)
+        return apply_x_zoom(
+            compact_fig(fig), "products", 0, top["Revenue"].max()
+        )
 
     @render_plotly
     def top_customers():
@@ -358,7 +397,9 @@ def server(input, output, session):
         fig = px.bar(merged, x="Revenue", y="CompanyName", orientation="h")
         fig.update_traces(hovertemplate="%{y}: $%{x:,.0f}<extra></extra>")
         fig.update_yaxes(tickfont=dict(size=8))
-        return compact_fig(fig)
+        return apply_x_zoom(
+            compact_fig(fig), "customers", 0, merged["Revenue"].max()
+        )
 
     @render_plotly
     def employee_bar():
@@ -370,7 +411,12 @@ def server(input, output, session):
         emp = emp.sort_values("Revenue", ascending=False)
         fig = px.bar(emp, x="Employee", y="Revenue")
         fig.update_traces(hovertemplate="%{x}: $%{y:,.0f}<extra></extra>")
-        return compact_fig(fig)
+        return apply_x_zoom(
+            compact_fig(fig),
+            "employee",
+            -0.5,
+            len(emp) - 0.5,
+        )
 
     @render_plotly
     def revenue_country():
@@ -383,7 +429,9 @@ def server(input, output, session):
         ).tail(10)
         fig = px.bar(country, x="Revenue", y="ShipCountry", orientation="h")
         fig.update_traces(hovertemplate="%{y}: $%{x:,.0f}<extra></extra>")
-        return compact_fig(fig)
+        return apply_x_zoom(
+            compact_fig(fig), "country", 0, country["Revenue"].max()
+        )
 
     @render_plotly
     def revenue_shipper():
@@ -394,7 +442,9 @@ def server(input, output, session):
         sh = sh.sort_values("Revenue", ascending=True)
         fig = px.bar(sh, x="Revenue", y="Shipper", orientation="h")
         fig.update_traces(hovertemplate="%{y}: $%{x:,.0f}<extra></extra>")
-        return compact_fig(fig)
+        return apply_x_zoom(
+            compact_fig(fig), "shipper", 0, sh["Revenue"].max()
+        )
 
     @render_plotly
     def delivery():
@@ -408,7 +458,12 @@ def server(input, output, session):
         counts = shipped["Delay"].clip(upper=30).value_counts().sort_index()
         fig = px.bar(x=counts.index, y=counts.values)
         fig.update_traces(hovertemplate="%{x} days: %{y} orders<extra></extra>")
-        return compact_fig(fig)
+        return apply_x_zoom(
+            compact_fig(fig),
+            "delivery",
+            counts.index.min(),
+            counts.index.max(),
+        )
 
 
 app = App(app_ui, server)
