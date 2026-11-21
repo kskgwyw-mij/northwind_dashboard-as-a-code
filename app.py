@@ -3,6 +3,7 @@ from shinywidgets import output_widget, render_plotly
 
 import pandas as pd
 import plotly.express as px
+from starlette.middleware.gzip import GZipMiddleware
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
@@ -411,4 +412,11 @@ def server(input, output, session):
         return compact_fig(fig)
 
 
-app = App(app_ui, server)
+class GzippedApp(App):
+    def init_starlette_app(self):
+        starlette_app = super().init_starlette_app()
+        starlette_app.add_middleware(GZipMiddleware, minimum_size=1024)
+        return starlette_app
+
+
+app = GzippedApp(app_ui, server)
