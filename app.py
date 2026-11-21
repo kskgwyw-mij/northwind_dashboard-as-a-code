@@ -230,6 +230,9 @@ def server(input, output, session):
         o["Month"] = o["OrderDate"].dt.to_period("M").dt.to_timestamp()
         freight = o.groupby("Month", as_index=False)["Freight"].sum()
 
+        ratio = freight.merge(monthly, on="Month", how="inner")
+        ratio["FreightPct"] = 100 * ratio["Freight"] / ratio["Revenue"]
+
         fig = make_subplots(specs=[[{"secondary_y": True}]])
         fig.add_bar(
             x=monthly["Month"],
@@ -237,18 +240,29 @@ def server(input, output, session):
             name="Revenue",
         )
         fig.add_scatter(
-            x=freight["Month"],
-            y=freight["Freight"],
-            name="Freight",
+            x=ratio["Month"],
+            y=ratio["Freight"],
+            name="Freight ($)",
             mode="lines+markers",
             line=dict(color="firebrick"),
+            visible="legendonly",
+            secondary_y=True,
+        )
+        fig.add_scatter(
+            x=ratio["Month"],
+            y=ratio["FreightPct"],
+            name="Freight as % of revenue",
+            mode="lines+markers",
+            line=dict(color="dimgray"),
             secondary_y=True,
         )
         fig.update_layout(
-            margin=dict(t=20, b=10), legend=dict(orientation="h")
+            margin=dict(t=20, b=10),
+            legend=dict(orientation="h"),
+            yaxis2=dict(ticksuffix="%"),
         )
         fig.update_yaxes(title_text="Revenue ($)", secondary_y=False)
-        fig.update_yaxes(title_text="Freight ($)", secondary_y=True)
+        fig.update_yaxes(title_text="Freight (% / $)", secondary_y=True)
         return fig
 
     @render_plotly
